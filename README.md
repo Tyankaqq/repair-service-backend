@@ -24,9 +24,9 @@ php artisan serve
 
 | Роль       | Email                      | Пароль   |
 |------------|----------------------------|----------|
-| Диспетчер  | dispatcher@repair.local    | secret123 |
-| Мастер 1   | master1@repair.local       | secret123 |
-| Мастер 2   | master2@repair.local       | secret123 |
+| Диспетчер  | dispatcher@repair.local    | password |
+| Мастер 1   | master1@repair.local       | password |
+| Мастер 2   | master2@repair.local       | password |
 
 ---
 
