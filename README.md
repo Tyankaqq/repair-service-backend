@@ -213,3 +213,112 @@ text
 
    Клиент и сервер могут работать на разных origin (например, разные порты локально).  
    Включён CORS на backend, а клиент всегда запрашивает JSON (`Accept: application/json`), чтобы API не возвращал HTML/редиректы.
+3. Минимум два автотеста (Feature)
+Ниже — примеры, их можно адаптировать под твои точные роуты и модели.
+
+tests/Feature/CreateRepairRequestTest.php
+php
+<?php
+
+namespace Tests\Feature;
+
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\TestCase;
+use App\Models\RepairRequest;
+
+class CreateRepairRequestTest extends TestCase
+{
+    use RefreshDatabase;
+
+    /** @test */
+    public function it_creates_repair_request_via_public_api()
+    {
+        $payload = [
+            'clientName'  => 'Иван Иванов',
+            'phone'       => '+7 900 000-00-00',
+            'address'     => 'Калининград, ул. Тестовая, д. 1',
+            'problemText' => 'Не работает кондиционер',
+        ];
+
+        $response = $this->postJson('/api/requests', $payload);
+
+        $response
+            ->assertStatus(201)
+            ->assertJsonFragment([
+                'clientName'  => 'Иван Иванов',
+                'status'      => 'new',
+            ]);
+
+        $this->assertDatabaseHas('repair_requests', [
+            'clientName'  => 'Иван Иванов',
+            'phone'       => '+7 900 000-00-00',
+            'status'      => 'new',
+        ]);
+    }
+}
+tests/Feature/TakeInProgressTest.php
+php
+<?php
+
+namespace Tests\Feature;
+
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\TestCase;
+use App\Models\User;
+use App\Models\RepairRequest;
+
+class TakeInProgressTest extends TestCase
+{
+    use RefreshDatabase;
+
+    /** @test */
+    public function master_can_take_assigned_request_in_progress()
+    {
+        $master = User::factory()->create([
+            'role' => 'master',
+        ]);
+
+        $request = RepairRequest::factory()->create([
+            'status'     => 'assigned',
+            'assignedTo' => $master->id,
+        ]);
+
+        $this->actingAs($master);
+
+        $response = $this->postJson("/api/requests/{$request->id}/take-in-progress");
+
+        $response
+            ->assertStatus(200)
+            ->assertJsonFragment([
+                'status' => 'in_progress',
+            ]);
+
+        $this->assertDatabaseHas('repair_requests', [
+            'id'     => $request->id,
+            'status' => 'in_progress',
+        ]);
+    }
+
+    /** @test */
+    public function second_take_in_progress_returns_conflict()
+    {
+        $master = User::factory()->create([
+            'role' => 'master',
+        ]);
+
+        $request = RepairRequest::factory()->create([
+            'status'     => 'assigned',
+            'assignedTo' => $master->id,
+        ]);
+
+        $this->actingAs($master);
+
+        // первый успешный перевод в in_progress
+        $this->postJson("/api/requests/{$request->id}/take-in-progress")
+            ->assertStatus(200);
+
+        // повторная попытка должна упасть с 409
+        $this->postJson("/api/requests/{$request->id}/take-in-progress")
+            ->assertStatus(409);
+    }
+}
